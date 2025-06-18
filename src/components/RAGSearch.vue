@@ -1,7 +1,6 @@
 <template>
   <div class="rag-search">
     <h2>Ask Staff Info (RAG)</h2>
-    <small class="info">Since janet is a staff, Ask anything like, who is janet? do you know janet...or it's up to you lah..</small>
     <p></p>
     <input
       v-model="question"
@@ -10,7 +9,6 @@
       class="ask-rag"
     />
     
-    <p></p>
     <button @click="handleRagSearch" :disabled="loading || !question.trim()">Ask</button>
     <div v-if="loading" class="loading">Loading...</div>
     <div v-if="error" class="error">{{ error }}</div>
@@ -22,22 +20,35 @@
       <ul>
         <li v-for="(doc, i) in retrievedDocs" :key="i">
           <p><strong>{{ doc.name }}</strong> - {{ doc.position }} ({{ doc.department }})</p>
-          <img v-if="doc.image" :src="`${baseUrl}${doc.image}`" alt="Staff Image" style="max-width: 100px;" />
+          <img v-if="doc.image" :src="getImageUrl(doc.image)" alt="Staff Image" style="max-width: 100px;" />
         </li>
       </ul>
     </div>
   </div>
+
+<div :class="notesClass">
+  <div @click="hideNotes"><small style="cursor: pointer">[close]</small></div>
+  <ul>
+      <li>Since janet is a staff, Ask anything like, who is janet? do you know janet...or it's up to you lah..</li>
+  </ul>
+</div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref } from 'vue';
 import axios from 'axios';
+const BASE_URL = process.env.VUE_APP_BASE_URL
 
 const question = ref('');
 const answer = ref('');
 const retrievedDocs = ref([]);
 const loading = ref(false);
 const error = ref('');
+const notesClass = ref('notes')
+
+const hideNotes = () => {
+  notesClass.value = notesClass.value === 'notes' ? 'hideNotes': 'notes'
+}
 
 async function handleRagSearch() {
   if (!question.value.trim()) return;
@@ -48,7 +59,7 @@ async function handleRagSearch() {
   error.value = '';
 
   try {
-    const response = await axios.post('http://localhost:5000/api/rag', { question: question.value.trim() });
+    const response = await axios.post(`${BASE_URL}/api/rag`, { question: question.value.trim() });
     answer.value = response.data.answer || 'No answer found.';
     retrievedDocs.value = response.data.retrievedDocs || [];
   } catch (err) {
@@ -59,65 +70,222 @@ async function handleRagSearch() {
   }
 }
 
-const baseUrl = ref('');
-onMounted(() => {
-  const base = window.location.origin.replace(':8080', ':5000');
-  baseUrl.value = base.endsWith('/') ? base.slice(0, -1) : base;
-});
+const getImageUrl = (image) => {
+  if (!image) return '';
+  return `${BASE_URL}/${image.replace(/^\/+/, '')}`;
+};
+
 </script>
 
+
 <style scoped>
+.hideNotes{
+  display: none;
+  cursor: pointer;
+}
+
+/* Base Styles - Mobile First */
 .rag-search {
-  max-width: 600px;
-  margin: 2rem auto;
-  font-family: Arial, sans-serif;
-  font-family: "Quicksand", sans-serif;
+  max-width: 100%;
+  padding: 1rem;
+  box-sizing: border-box;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
-.ask-rag{
-    border-radius: 5px;
-    border: 1px solid;
+h2 {
+  font-size: 1.5rem;
+  color: #2c3e50;
+  margin-bottom: 0.5rem;
+  text-align: center;
 }
 
-input {
-  width: 80%;
-  padding: 0.5rem;
-  margin-right: 0.5rem;
+/* Search Input */
+.ask-rag {
+  width: 100%;
+  padding: 0.8rem;
+  margin: 0.5rem 0;
+  border: 1px solid #ddd;
+  border-radius: 8px;
   font-size: 1rem;
-  font-family: "Quicksand", sans-serif;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
 }
 
+/* Button */
 button {
-  padding: 0.5rem 1rem;
+  width: 100%;
+  padding: 0.8rem;
+  margin: 0.5rem 0;
+  background-color: #42b983;
+  color: white;
+  border: none;
+  border-radius: 8px;
   font-size: 1rem;
-  background-color: #5a67d8;
-  color: #fff;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+}
+
+button:hover:not(:disabled) {
+  background-color: #3aa876;
+}
+
+/* Results Section */
+.answer-section {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background: #f8f9fa;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+h3, h4 {
+  color: #2c3e50;
+  margin: 0.8rem 0 0.5rem;
+}
+
+h3 {
+  font-size: 1.3rem;
+}
+
+h4 {
+  font-size: 1.1rem;
+}
+
+ul {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0;
+}
+
+li {
+  padding: 0.8rem;
+  margin-bottom: 0.8rem;
+  background: white;
+  border-radius: 6px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+/* Staff Images */
+img {
+  max-width: 80px;
+  height: auto;
+  border-radius: 4px;
+  margin-top: 0.5rem;
+  display: block;
+}
+
+/* Status Messages */
+.loading, .error {
+  padding: 0.8rem;
+  margin: 0.5rem 0;
+  border-radius: 8px;
+  text-align: center;
 }
 
 .loading {
-  color: #666;
-  margin-top: 1rem;
-
+  background-color: #e3f2fd;
+  color: #1976d2;
 }
 
 .error {
-  color: red;
-  margin-top: 1rem;
+  background-color: #ffebee;
+  color: #d32f2f;
 }
 
-.answer-section {
-  margin-top: 1.5rem;
-  background: #f5f5f5;
+/* Notes Panel */
+.notes-panel {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #f8f9fa;
   padding: 1rem;
-  border-radius: 6px;
+  border-top: 1px solid #ddd;
+  z-index: 100;
+  box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
+  transition: all 0.3s ease;
 }
 
-.answer-section h3 {
+.notes-panel.hidden {
+  transform: translateY(100%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.notes-panel small {
+  display: block;
+  text-align: right;
   margin-bottom: 0.5rem;
+  color: #666;
 }
 
-.answer-section ul {
-  list-style-type: disc;
-  margin-left: 1.2rem;
+.notes-panel ul {
+  margin: 0;
+}
+
+.notes-panel li {
+  background: transparent;
+  box-shadow: none;
+  padding: 0.3rem 0;
+  font-size: 0.9rem;
+  color: #555;
+}
+
+/* Desktop Adjustments */
+@media (min-width: 768px) {
+  .rag-search {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 2rem;
+  }
+  
+  .ask-rag {
+    padding: 1rem;
+  }
+  
+  button {
+    width: auto;
+    min-width: 120px;
+    padding: 1rem 1.5rem;
+    display: inline-block;
+    margin-left: 0.5rem;
+  }
+  
+  .notes-panel {
+    max-width: 600px;
+    margin: 0 auto;
+    left: 50%;
+    transform: translateX(-50%);
+    border-radius: 8px 8px 0 0;
+  }
+  
+  .notes-panel.hidden {
+    transform: translateX(-50%) translateY(100%);
+  }
+}
+
+.notes{
+  display: block;
+  position: absolute;
+  border: 1px dashed gray;
+  font-size: 13px;
+  width: 250px;
+  overflow: hidden;
+  font-family:'Courier New', Courier, monospace;
+  right: 50px;
+  top: 50px;
+}
+
+.notes center{
+  font-size: 15px;
+  font-weight: bold;
+}
+
+.notes ul li{
+  box-sizing: border-box;
 }
 </style>

@@ -69,18 +69,16 @@ app.use(express.json());
 
 // //for uploading image
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
+// .replace(/^uploads\//, '')
 app.post('/api/upsert', upload.single('image'), async (req, res) => {
   try {
-    const { id, name, position, department } = req.body;
+    let { id, name, position, department, existingImage } = req.body;
+    id = id.trim(); // prevent ID mismatch due to extra spaces
 
     if (!id || !name || !position || !department) {
       return res.status(400).json({ error: 'Missing fields' });
     }
 
-    const image = req.file ? req.file.filename.replace(/^uploads\//, '') : null;
-
-    // Auto-generate tags from position & department
     const tags = [];
     const lowerPosition = position.toLowerCase();
     const lowerDepartment = department.toLowerCase();
@@ -90,16 +88,41 @@ app.post('/api/upsert', upload.single('image'), async (req, res) => {
     if (lowerDepartment.includes('admin')) tags.push('admin', 'administration');
     if (lowerDepartment.includes('it') || lowerPosition.includes('it')) tags.push('it', 'information technology');
 
-    // Remove duplicates
     const uniqueTags = [...new Set(tags)];
 
-    const metadata = { id, name, position, department, image, tags: uniqueTags };
+    // Step 1: Fetch existing metadata
+    let existingMetadata = {};
+    try {
+      const existingVector = await index.fetch([id]);
+      if (existingVector?.vectors?.[id]?.metadata) {
+        existingMetadata = existingVector.vectors[id].metadata;
+        console.log('Existing metadata:', existingMetadata);
+      }
+    } catch (e) {
+      console.warn('Metadata fetch failed or not found:', e);
+    }
 
+    // Decide which image to retain or update
+    const imageFilename =
+      req.file?.filename.replace(/^uploads\//, '') || existingImage || existingMetadata.image || '';
+
+    // Generate vector BEFORE upsert
     const vector = await embedText(`${name} ${position} ${department}`, 'search_document');
 
+    // Construct metadata
+    const metadata = {
+      id,
+      name,
+      position,
+      department,
+      tags: uniqueTags,
+      image: imageFilename,
+    };
+
+    // ✅ Step 5: Upsert into Pinecone
     await index.upsert([{ id, values: vector, metadata }]);
 
-    res.json({ message: 'Staff added' });
+    res.json({ message: 'Staff updated' });
   } catch (err) {
     console.error('Upsert error:', err);
     res.status(500).json({ error: 'Internal Server Error' });
@@ -107,8 +130,9 @@ app.post('/api/upsert', upload.single('image'), async (req, res) => {
 });
 
 
-//search operation
 
+
+//search operation
 app.post('/api/search', async (req, res) => {
   try {
     let { query } = req.body;
@@ -117,7 +141,6 @@ app.post('/api/search', async (req, res) => {
       return res.status(400).json({ error: 'Invalid search query' });
     }
 
-    // Smart keyword expansions
     const expansions = {
       it: 'information technology',
       hr: 'human resources',
@@ -134,38 +157,44 @@ app.post('/api/search', async (req, res) => {
       }
     });
 
-    // Convert updated query into embedding vector
     const vector = await embedText(query, 'search_query');
 
-    // Query Pinecone
     const result = await index.query({
       vector,
       topK: 5,
       includeMetadata: true,
     });
 
-    // Smart filtering: match by score OR keyword tags
     const filtered = result.matches.filter(match => {
       const meta = match.metadata;
       const hasVectorMatch = match.score >= 0.4;
-
       const lowerName = meta?.name?.toLowerCase() || '';
       const hasNameMatch = lowerName.includes(lowerQuery);
-
       const hasTagMatch = meta?.tags?.some(tag =>
         tag.toLowerCase().includes(lowerQuery)
       );
-
       return hasVectorMatch || hasTagMatch || hasNameMatch;
     });
 
-    console.log('Filtered matches:', filtered);
-    res.json(filtered.length ? filtered : []);
+    const formatted = filtered.map(match => ({
+      id: match.id,
+      score: match.score,
+      metadata: {
+        name: match.metadata.name,
+        position: match.metadata.position,
+        department: match.metadata.department,
+        tags: match.metadata.tags || [],
+        image: match.metadata.image ? `/${match.metadata.image}` : null,
+      }
+    }));
+
+    res.json(formatted);
   } catch (err) {
     console.error('Search error:', err);
     res.status(500).json({ error: 'Search failed' });
   }
 });
+
 
 
 app.delete('/api/delete/:id', async (req, res) => {
@@ -225,7 +254,7 @@ app.post('/api/rag', async (req, res) => {
       Position: ${doc.position}
       Department: ${doc.department}
       Tags: ${doc.tags.length ? doc.tags.join(', ') : 'N/A'}`
-        ).join('\n\n');
+    ).join('\n\n');
 
     // Call Cohere with the context and question
     const { CohereClient } = require('cohere-ai');

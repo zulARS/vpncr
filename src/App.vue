@@ -192,7 +192,7 @@ button.active {
   }
 
   button {
-    grid-column: span 1;
+    grid-column: span 4;
   }
 }
 </style>
