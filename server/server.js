@@ -37,6 +37,13 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Serve Vue build from root/dist
+app.use(express.static(path.join(__dirname, '../dist')));
+
+// Handle SPA routes
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../dist/index.html'));
+});
 //upsert operation
 
 // app.post('/api/upsert', async (req, res) => {
@@ -89,6 +96,7 @@ app.post('/api/upsert', upload.single('image'), async (req, res) => {
     if (lowerDepartment.includes('it') || lowerPosition.includes('it')) tags.push('it', 'information technology');
 
     const uniqueTags = [...new Set(tags)];
+    if (uniqueTags.length === 0) uniqueTags.push('general');
 
     // Step 1: Fetch existing metadata
     let existingMetadata = {};
