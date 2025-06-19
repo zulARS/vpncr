@@ -6,12 +6,17 @@
     "serve": "vue-cli-service serve",
     "build": "vue-cli-service build",
     "lint": "vue-cli-service lint",
-    "start": "node server/server.js",        
+    "start": "node server/server.js",
     "install-server": "cd server && npm install"
   },
   "dependencies": {
+    "@pinecone-database/pinecone": "^6.1.1",
     "axios": "^1.9.0",
+    "cohere-ai": "^7.17.1",
     "core-js": "^3.8.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "multer": "^2.0.1",
     "vue": "^3.2.13"
   },
   "devDependencies": {
